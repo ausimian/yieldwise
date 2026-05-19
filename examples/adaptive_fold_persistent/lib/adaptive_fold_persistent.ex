@@ -57,15 +57,17 @@ defmodule AdaptiveFoldPersistent do
 
       %{
         first_chunk_size: non_neg_integer(),
+        total_chunks:     non_neg_integer(),
         item_cost_us:     float(),
         variance:         float()
       }
 
   `first_chunk_size` is the chunk size yieldwise picked for the very
   first chunk of this fold — a useful proxy for "how warm was the
-  estimator when this call started". `item_cost_us` and `variance`
-  are the post-fold estimator state, which is what subsequent calls
-  on the same scheduler thread will see as their seed.
+  estimator when this call started". `total_chunks` is how many
+  chunks the fold ran in total. `item_cost_us` and `variance` are
+  the post-fold estimator state, which is what subsequent calls on
+  the same scheduler thread will see as their seed.
   """
   @spec fold_with_stats(binary()) :: {non_neg_integer(), map()}
   def fold_with_stats(bin) when is_binary(bin), do: fold_nif(bin)

@@ -25,7 +25,11 @@ defmodule AdaptiveFoldPersistent.MixProject do
   defp deps do
     [
       {:yieldwise, path: "../.."},
-      {:elixir_make, "~> 0.8", runtime: false}
+      {:elixir_make, "~> 0.8", runtime: false},
+      # Sibling example, pulled in only for bench/compare.exs so it
+      # can put the two NIFs side-by-side on the same input. Not
+      # needed at test or runtime.
+      {:adaptive_fold, path: "../adaptive_fold", only: :dev}
     ]
   end
 

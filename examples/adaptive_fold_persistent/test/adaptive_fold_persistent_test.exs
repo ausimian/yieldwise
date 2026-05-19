@@ -39,6 +39,7 @@ defmodule AdaptiveFoldPersistentTest do
       assert hash == reference_fold(bin)
       assert is_map(stats)
       assert Map.has_key?(stats, :first_chunk_size)
+      assert Map.has_key?(stats, :total_chunks)
       assert Map.has_key?(stats, :item_cost_us)
       assert Map.has_key?(stats, :variance)
     end

@@ -60,12 +60,14 @@ typedef struct {
     tls_slot     *home_tls;           /* TLS slot we read from at entry;
                                        * commit only if we end here too    */
     size_t        first_chunk_size;   /* recorded on first entry, for stats */
+    size_t        total_chunks;       /* incremented per chunk, for stats   */
 } fold_state;
 
 static ErlNifResourceType *FOLD_STATE = NULL;
 
 /* Atoms used in the stats map. Cached at load time. */
 static ERL_NIF_TERM ATOM_FIRST_CHUNK_SIZE;
+static ERL_NIF_TERM ATOM_TOTAL_CHUNKS;
 static ERL_NIF_TERM ATOM_ITEM_COST_US;
 static ERL_NIF_TERM ATOM_VARIANCE;
 
@@ -81,6 +83,7 @@ load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM info)
     if (FOLD_STATE == NULL) return 1;
 
     ATOM_FIRST_CHUNK_SIZE = enif_make_atom(env, "first_chunk_size");
+    ATOM_TOTAL_CHUNKS     = enif_make_atom(env, "total_chunks");
     ATOM_ITEM_COST_US     = enif_make_atom(env, "item_cost_us");
     ATOM_VARIANCE         = enif_make_atom(env, "variance");
 
@@ -105,6 +108,9 @@ build_stats(ErlNifEnv *env, const fold_state *st)
     ERL_NIF_TERM map = enif_make_new_map(env);
     enif_make_map_put(env, map, ATOM_FIRST_CHUNK_SIZE,
                       enif_make_uint64(env, (ErlNifUInt64)st->first_chunk_size),
+                      &map);
+    enif_make_map_put(env, map, ATOM_TOTAL_CHUNKS,
+                      enif_make_uint64(env, (ErlNifUInt64)st->total_chunks),
                       &map);
     enif_make_map_put(env, map, ATOM_ITEM_COST_US,
                       enif_make_double(env, st->est.item_cost_us), &map);
@@ -156,6 +162,7 @@ fold_nif(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
         st->home_tls         = &TLS_EST;                  /* this thread's slot */
         st->est              = TLS_EST.est;               /* snapshot in */
         st->first_chunk_size = yw_next_chunk(&st->est, &cfg, bin.size);
+        st->total_chunks     = 0;
     } else {
         if (!enif_get_resource(env, argv[1], FOLD_STATE, (void **)&st))
             return enif_make_badarg(env);
@@ -182,6 +189,7 @@ fold_nif(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
         st->pos += n;
 
         elapsed = yw_timer_elapsed_us(&t);
+        st->total_chunks++;
 
         if (yw_chunk_done(env, &st->est, &cfg, n, elapsed)) {
             ERL_NIF_TERM state_term;
