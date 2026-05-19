@@ -1,0 +1,19 @@
+# Mix / Elixir
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+*.beam
+
+# NIF build products
+/priv/*.so
+/priv/*.dll
+/priv/*.dylib
+*.o
+*.obj
+*.exp
+*.lib
+*.pdb
