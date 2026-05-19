@@ -21,10 +21,14 @@ NIF_SOURCES = $(YIELDWISE_C)\yieldwise.c \
 
 NIF_OUT     = $(PRIV_DIR)\adaptive_fold.dll
 
-# ERL_INCLUDE is expected to be supplied by the build driver; if not,
-# fall back to invoking erl.exe ourselves.
+# elixir_make sets ERTS_INCLUDE_DIR on all platforms; allow ERL_INCLUDE
+# as an explicit override for manual nmake invocations.
 !IF "$(ERL_INCLUDE)" == ""
-ERL_INCLUDE = $(shell erl.exe -noshell -eval "io:format(\"~s/erts-~s/include\",[code:root_dir(),erlang:system_info(version)]),halt().")
+!IF "$(ERTS_INCLUDE_DIR)" != ""
+ERL_INCLUDE = $(ERTS_INCLUDE_DIR)
+!ELSE
+!ERROR ERL_INCLUDE not set. Run via `mix compile` (which sets ERTS_INCLUDE_DIR) or pass ERL_INCLUDE=<path-to-erts-include> on the nmake command line.
+!ENDIF
 !ENDIF
 
 # /O2  — speed-optimised

@@ -11,6 +11,11 @@
  * The first entry receives the binary as argv[0] and arity 1; resumed
  * entries are arity 2, with argv[1] being the resource that carries
  * the work state (cursor, accumulator, estimator).
+ *
+ * This NIF uses the toolkit (yieldwise.h) directly so the chunk-loop
+ * skeleton is visible in full. Clients that don't need that visibility
+ * can replace the loop body with yw_run from yieldwise_driver.h and
+ * three small callbacks.
  */
 
 #include <stddef.h>
@@ -88,7 +93,7 @@ fold_nif(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     if (first_entry) {
         st = (fold_state *)enif_alloc_resource(FOLD_STATE, sizeof *st);
         if (st == NULL)
-            return enif_make_badarg(env);
+            return enif_raise_exception(env, enif_make_atom(env, "enomem"));
         st->pos = 0;
         st->acc = 0xcbf29ce484222325ULL;          /* FNV offset basis */
         /*

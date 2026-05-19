@@ -87,11 +87,7 @@ yw_timer_elapsed_us(const yw_timer *t)
 static size_t
 yw__clamp_size(double x, size_t lo, size_t hi)
 {
-    /*
-     * Convert a double chunk-size candidate to size_t with hard clamps.
-     * We compare in double-space against (double)SIZE_MAX-ish via `hi` so
-     * neither end can wrap.
-     */
+    /* Compare in double-space so the size_t cast can never wrap. */
     if (!(x > 0.0))      return lo;         /* covers NaN and negatives    */
     if (x < (double)lo)  return lo;
     if (x > (double)hi)  return hi;
@@ -156,17 +152,15 @@ yw_chunk_done(ErlNifEnv *env,
 
     /*
      * Step 2 — VM hint. Always runs, with the raw elapsed time (including
-     * any preemption). A ~1 ms slice is "100%"; convert µs → percent and
-     * clamp to the [1, 100] range enif_consume_timeslice accepts.
+     * any preemption). enif_consume_timeslice treats a 1 ms slice as 100%,
+     * so percent = µs / 10. The +0.5 before the truncating cast rounds
+     * half-up (elapsed_us is non-negative); clamp to the [1, 100] range
+     * the API accepts.
      */
     {
-        double percent_d = elapsed_us * 0.1;   /* (us / 1000) * 100 == us/10 */
-        long   pct;
-
-        percent_d = floor(percent_d + 0.5);    /* round half-up               */
+        double percent_d = elapsed_us * 0.1 + 0.5;
         if (percent_d < 1.0)   percent_d = 1.0;
         if (percent_d > 100.0) percent_d = 100.0;
-        pct = (long)percent_d;
-        return enif_consume_timeslice(env, (int)pct);
+        return enif_consume_timeslice(env, (int)percent_d);
     }
 }
