@@ -1,0 +1,43 @@
+# nmake-compatible Makefile for Windows / MSVC.
+#
+# Invoked by elixir_make on win32: `nmake /F Makefile.win`. Build from an
+# x64 Native Tools Command Prompt for VS so the architecture matches the
+# installed Erlang. The NIF does NOT link erl_nif.lib — the enif_* calls
+# bind to a callback table the VM fills in at load time.
+#
+# YIELDWISE_DIR is passed in by the example's mix.exs and points at the
+# yieldwise dep's source tree.
+
+PRIV_DIR      = priv
+C_SRC_DIR     = c_src
+!IF "$(YIELDWISE_DIR)" == ""
+YIELDWISE_DIR = ..\..
+!ENDIF
+YIELDWISE_C   = $(YIELDWISE_DIR)\c_src
+
+NIF_SOURCES = $(YIELDWISE_C)\yieldwise.c \
+              $(YIELDWISE_C)\yieldwise_driver.c \
+              $(C_SRC_DIR)\example_adaptive_fold.c
+
+NIF_OUT     = $(PRIV_DIR)\adaptive_fold.dll
+
+# ERL_INCLUDE is expected to be supplied by the build driver; if not,
+# fall back to invoking erl.exe ourselves.
+!IF "$(ERL_INCLUDE)" == ""
+ERL_INCLUDE = $(shell erl.exe -noshell -eval "io:format(\"~s/erts-~s/include\",[code:root_dir(),erlang:system_info(version)]),halt().")
+!ENDIF
+
+# /O2  — speed-optimised
+# /LD  — build a DLL
+# /MD  — dynamic CRT (must match the VM's; never /MT)
+# /W3  — reasonable warnings
+CFLAGS  = /O2 /LD /MD /W3 /nologo /I"$(ERL_INCLUDE)" /I"$(YIELDWISE_C)" /I"$(C_SRC_DIR)"
+
+all: $(NIF_OUT)
+
+$(NIF_OUT): $(NIF_SOURCES)
+	@if not exist $(PRIV_DIR) mkdir $(PRIV_DIR)
+	cl $(CFLAGS) $(NIF_SOURCES) /Fe:$(NIF_OUT)
+
+clean:
+	@if exist $(NIF_OUT) del /Q $(NIF_OUT)
