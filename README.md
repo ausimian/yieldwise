@@ -71,7 +71,10 @@ CFLAGS += -I$(YIELDWISE_C)
 toolkit directly, omit it.
 
 See `examples/adaptive_fold/` in the repository for a complete worked example
-(an FNV-1a-style mixing fold over a binary).
+(an FNV-1a-style mixing fold over a binary). `examples/adaptive_fold_persistent/`
+is a sibling that demonstrates persisting the learnt estimator across NIF calls
+via origin-pinned thread-local storage — useful when the same NIF is invoked
+repeatedly and you want the second-call onward to skip the convergence cost.
 
 ## Toolkit (`yieldwise.h`)
 

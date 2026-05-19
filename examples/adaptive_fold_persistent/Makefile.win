@@ -1,0 +1,46 @@
+# nmake-compatible Makefile for Windows / MSVC.
+#
+# Invoked by elixir_make on win32: `nmake /F Makefile.win`. Build from an
+# x64 Native Tools Command Prompt for VS so the architecture matches the
+# installed Erlang. The NIF does NOT link erl_nif.lib — the enif_* calls
+# bind to a callback table the VM fills in at load time.
+#
+# C11 is required for _Thread_local (MSVC supports it under /std:c11).
+
+PRIV_DIR      = priv
+C_SRC_DIR     = c_src
+!IF "$(YIELDWISE_DIR)" == ""
+YIELDWISE_DIR = ..\..
+!ENDIF
+YIELDWISE_C   = $(YIELDWISE_DIR)\c_src
+
+NIF_SOURCES = $(YIELDWISE_C)\yieldwise.c \
+              $(C_SRC_DIR)\example_adaptive_fold_persistent.c
+
+NIF_OUT     = $(PRIV_DIR)\adaptive_fold_persistent.dll
+
+# elixir_make sets ERTS_INCLUDE_DIR on all platforms; allow ERL_INCLUDE
+# as an explicit override for manual nmake invocations.
+!IF "$(ERL_INCLUDE)" == ""
+!IF "$(ERTS_INCLUDE_DIR)" != ""
+ERL_INCLUDE = $(ERTS_INCLUDE_DIR)
+!ELSE
+!ERROR ERL_INCLUDE not set. Run via `mix compile` (which sets ERTS_INCLUDE_DIR) or pass ERL_INCLUDE=<path-to-erts-include> on the nmake command line.
+!ENDIF
+!ENDIF
+
+# /O2       — speed-optimised
+# /LD       — build a DLL
+# /MD       — dynamic CRT (must match the VM's; never /MT)
+# /W3       — reasonable warnings
+# /std:c11  — _Thread_local
+CFLAGS  = /O2 /LD /MD /W3 /std:c11 /nologo /I"$(ERL_INCLUDE)" /I"$(YIELDWISE_C)" /I"$(C_SRC_DIR)"
+
+all: $(NIF_OUT)
+
+$(NIF_OUT): $(NIF_SOURCES)
+	@if not exist $(PRIV_DIR) mkdir $(PRIV_DIR)
+	cl $(CFLAGS) $(NIF_SOURCES) /Fe:$(NIF_OUT)
+
+clean:
+	@if exist $(NIF_OUT) del /Q $(NIF_OUT)
