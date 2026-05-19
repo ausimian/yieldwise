@@ -10,16 +10,20 @@
  * open with the converged estimate and pick a much larger first
  * chunk, skipping the warm-up cost.
  *
- * Pattern is "origin-pinned snapshot in / snapshot out":
+ * Pattern is "snapshot in / commit on same-thread completion":
  *
- *   - on first entry, capture &TLS_EST and copy its yw_estimator
- *     into the per-fold resource;
+ *   - on first entry, capture the current thread's TLS pointer and
+ *     copy its yw_estimator into the per-fold resource;
  *   - the resource's copy is what the chunk loop mutates (so a
  *     reschedule that resumes on a different scheduler thread keeps
  *     using the same estimator, exactly as in the basic example);
- *   - at fold completion, write the resource's final state back
- *     through the captured pointer — landing in the originating
- *     thread's TLS slot regardless of which thread finished.
+ *   - at fold completion, re-resolve the current thread's TLS
+ *     pointer and compare against the captured one. If they match
+ *     (the fold finished where it started), commit the resource's
+ *     final state back to TLS. If they differ (mid-fold migration),
+ *     silently drop the update — writing measurements taken across
+ *     multiple threads into either slot would skew that thread's
+ *     future estimates more than dropping the data point hurts.
  *
  * fold_nif/1 returns {hash, stats_map}; the Elixir wrapper splits
  * this into fold/1 (just the hash) and fold_with_stats/1 (the
@@ -53,7 +57,8 @@ typedef struct {
     size_t        pos;
     uint64_t      acc;
     yw_estimator  est;                /* live state during this fold        */
-    tls_slot     *origin_tls;         /* fold-origin TLS slot, write-back   */
+    tls_slot     *home_tls;           /* TLS slot we read from at entry;
+                                       * commit only if we end here too    */
     size_t        first_chunk_size;   /* recorded on first entry, for stats */
 } fold_state;
 
@@ -148,7 +153,7 @@ fold_nif(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
         st->pos              = 0;
         st->acc              = 0xcbf29ce484222325ULL;     /* FNV offset */
-        st->origin_tls       = &TLS_EST;                  /* origin-pinned */
+        st->home_tls         = &TLS_EST;                  /* this thread's slot */
         st->est              = TLS_EST.est;               /* snapshot in */
         st->first_chunk_size = yw_next_chunk(&st->est, &cfg, bin.size);
     } else {
@@ -199,12 +204,18 @@ fold_nif(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     }
 
     /*
-     * Fold complete on this entry — snapshot out before returning.
-     * The captured origin pointer commits the final state back to the
-     * originating thread's TLS, regardless of which thread we finished
-     * on (see file header for the design note).
+     * Fold complete on this entry. Commit the learnt state back to
+     * TLS only if we're still on the thread we started on; if BEAM
+     * migrated the work mid-fold, the measurements span multiple
+     * threads' cache/load conditions and writing them to either
+     * slot would skew that thread's future seeds.
      */
-    st->origin_tls->est = st->est;
+    {
+        tls_slot *current = &TLS_EST;
+        if (st->home_tls == current) {
+            current->est = st->est;
+        }
+    }
 
     {
         ERL_NIF_TERM hash   = enif_make_uint64(env, st->acc);

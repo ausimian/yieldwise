@@ -5,24 +5,30 @@ defmodule AdaptiveFoldPersistent do
 
   Same fold semantics as `AdaptiveFold` (FNV-1a-style mixing hash over
   every byte of a binary), but the Kalman-filtered estimator is
-  bootstrapped from — and committed back to — a `_Thread_local` slot
-  on the scheduler thread the fold *started* on.
+  bootstrapped from — and conditionally committed back to — a
+  `_Thread_local` slot on the scheduler thread the fold *started*
+  on.
 
   The result: the first call seeds the slot from a deliberately
   pessimistic 0.05 µs/byte and converges over its chunk loop; later
-  calls open with the converged estimate and pick a much larger first
-  chunk, skipping the warm-up cost.
+  calls on the same scheduler open with the converged estimate and
+  pick a much larger first chunk, skipping the warm-up cost.
 
-  Pattern is *origin-pinned snapshot in / snapshot out*:
+  Pattern is *snapshot in / commit on same-thread completion*:
 
-    * on first entry the NIF captures `&TLS_EST` and copies its
-      `yw_estimator` into the per-fold resource;
+    * on first entry the NIF captures the current thread's TLS
+      pointer and copies its `yw_estimator` into the per-fold
+      resource;
     * the resource's copy is what the chunk loop mutates (so a
       reschedule that resumes on a different scheduler thread keeps
       using the same estimator, exactly as in the basic example);
-    * at fold completion the resource's final state is written back
-      *through the captured pointer*, landing in the originating
-      thread's TLS slot regardless of which thread finished.
+    * at fold completion the NIF re-resolves the current thread's
+      TLS pointer and compares it against the captured one. If they
+      match (the fold finished where it started), the final state
+      is committed back. If they differ (mid-fold scheduler
+      migration), the update is silently dropped — measurements
+      taken across multiple threads would skew either thread's
+      future estimates more than dropping the data point hurts.
 
   See `fold_with_stats/1` for an instrumented form that returns the
   first-chunk size and the post-fold estimator state — useful for

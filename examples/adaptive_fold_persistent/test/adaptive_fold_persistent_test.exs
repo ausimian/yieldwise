@@ -45,7 +45,7 @@ defmodule AdaptiveFoldPersistentTest do
   end
 
   describe "TLS persistence" do
-    test "snapshot-out commits learnt state to the origin slot" do
+    test "snapshot-out commits learnt state to TLS" do
       bin = :binary.copy(<<0xAB>>, 1 * 1024 * 1024)
 
       {_hash, %{item_cost_us: cost, variance: var}} =
@@ -77,21 +77,17 @@ defmodule AdaptiveFoldPersistentTest do
       # Cold seed (0.05 µs/byte) gives a first chunk around 2300; a
       # converged estimator (~0.001 µs/byte) gives one north of 100 k.
       # Asserting *any* call lands in the warm range is enough to
-      # prove snapshot in/out is wired: it's impossible to read a
-      # converged seed without a prior fold having written one.
+      # prove snapshot in / commit is wired: it's impossible to read
+      # a converged seed without a prior fold having written one.
       #
-      # We can't insist all five calls land in the warm range. Origin
-      # pinning is a *within-fold* guarantee (write-back goes to the
-      # fold's originating thread, even if work hops schedulers via
-      # enif_schedule_nif); each new fold's snapshot-in still reads
-      # whichever scheduler thread's TLS the caller is currently on.
-      # If BEAM work-steals the test process between two folds onto
+      # We can't insist all five calls land in the warm range. Each
+      # fold's snapshot-in reads the current scheduler thread's TLS;
+      # if BEAM work-steals the test process between two folds onto
       # a thread whose TLS was previously seeded by an earlier
-      # tiny-input test — measurements there are dominated by per-NIF
-      # overhead and the filter converges to a pessimistic cost — the
-      # next fold reads that pessimistic state and its first chunk is
-      # small. That's expected, and unrelated to whether persistence
-      # itself works.
+      # tiny-input test (whose measurements were dominated by per-NIF
+      # overhead and converged to a pessimistic cost), the next fold
+      # reads that pessimistic state and its first chunk is small.
+      # That's expected and unrelated to whether persistence works.
       assert Enum.any?(sizes, fn s -> s > 10_000 end),
              "expected TLS persistence to produce at least one warm first chunk " <>
                "(cold seed ~2300, converged ≫ 100k); got #{inspect(sizes)}"
