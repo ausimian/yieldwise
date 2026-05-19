@@ -31,7 +31,7 @@ defmodule Yieldwise.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(c_src mix.exs README.md LICENSE)
+      files: ~w(c_src/*.c c_src/*.h mix.exs README.md LICENSE)
     ]
   end
 end
